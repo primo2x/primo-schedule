@@ -4,87 +4,507 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Schedule</title>
+<title>primo のカレンダー</title>
+<meta property="og:type" content="website">
+<meta property="og:title" content="primo のカレンダー">
+<meta property="og:description" content="会える日が分かるカレンダーです。予定の中身は表示されません。">
+<meta property="og:image" content="https://primo2x.github.io/primo-schedule/ogp.png">
+<meta name="twitter:card" content="summary_large_image">
 <style>
-  body { font-family: sans-serif; margin: 0; padding: 16px; color: #1f2d30; }
-  .cal { max-width: 380px; margin: 0 auto; }
-  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-  h2 { font-size: 16px; font-weight: 500; margin: 0; }
-  button { border: 1px solid #c9d8dc; background: none; border-radius: 8px; padding: 4px 12px; font-size: 16px; }
-  button:disabled { opacity: .35; }
-  .dow, #grid { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; }
-  .dow { font-size: 11px; color: #6b7f84; }
-  .day { height: 40px; margin: 2px; display: flex; align-items: center; justify-content: center; border-radius: 8px; box-sizing: border-box; }
-  .past { color: #aab8bc; }
-  .busy { background: #96d9e6; color: #1f5560; font-weight: 500; }
-  .today { border: 1px solid #6b7f84; }
-  #msg, .note { font-size: 12px; color: #6b7f84; text-align: center; }
+  :root {
+    --bg: #2a2723; --bar: #3a352f;
+    --cream: #f7f2e8; --cream2: #efe7d8; --tan: #e9dcc6;
+    --brown: #7a5a43; --ink: #4a3a2e; --muted: #7a6c5b;
+    --line: #e5dac7; --red: #b4503f;
+    --busy-bg: #d5e3ea; --busy-bar: #4f7a93; --busy-ink: #2f4a5a;
+    --ease: cubic-bezier(.22, .8, .3, 1);
+    --spring: cubic-bezier(.3, 1.25, .5, 1);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: #f3ece0;
+    font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif;
+  }
+  svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2;
+        stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  @keyframes cellIn { from { opacity: 0; transform: translateY(8px); } }
+  @keyframes bar { from { transform: scaleX(0); } }
+  @keyframes sideIn { from { opacity: 0; transform: translateY(8px); } }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } }
+
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; }
+  .logo-icon { width: 36px; height: 36px; border-radius: 10px; background: var(--tan);
+               color: var(--brown); display: grid; place-items: center; }
+  .logo-icon svg { width: 20px; height: 20px; }
+  .pill { display: flex; align-items: center; gap: 6px; background: var(--bar); color: #d9cfbf;
+          border-radius: 999px; padding: 6px 14px; font-size: 11px; }
+
+  .hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
+          padding: 24px 24px 28px; max-width: 1048px; margin: 0 auto; }
+  h1 { margin: 0; font-size: 32px; font-weight: 500; }
+  .meta { text-align: right; font-size: 12px; }
+  .meta .pub { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+  .meta .upd { color: #a99a86; font-size: 11px; margin-top: 4px; }
+
+  .layout {
+    max-width: 1048px; margin: 0 auto; padding: 0 24px; display: grid; gap: 16px;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    grid-template-areas: "next next" "cal side";
+    align-items: start;
+  }
+  #nextCard { grid-area: next; }
+  #card { grid-area: cal; }
+  #side { grid-area: side; position: sticky; top: 16px; }
+  .card { background: var(--cream); color: var(--ink); border-radius: 16px; padding: 20px 20px 12px; }
+
+  /* 次に空いている日 */
+  .next-card { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 20px; }
+  .next-label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .chips, .near { display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px; }
+  .chip {
+    border: 0; background: var(--cream2); color: var(--ink); font: inherit; font-size: 13px;
+    border-radius: 999px; padding: 8px 14px; cursor: pointer;
+    transition: background-color .25s var(--ease), color .25s var(--ease), transform .3s var(--spring);
+    animation: cellIn .45s var(--ease) backwards; animation-delay: calc(var(--i, 0) * 50ms);
+  }
+  .chip:hover { background: var(--brown); color: #fff; transform: translateY(-2px); }
+  .chip:active { transform: scale(.96); }
+
+  /* カレンダー */
+  .cal-head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 14px; }
+  .year { font-size: 12px; color: var(--muted); }
+  .month { font-size: 28px; font-weight: 600; line-height: 1.2; }
+  .month.swap { animation: fadeUp .35s var(--ease); }
+  .ctrl { display: flex; align-items: center; gap: 6px; }
+  .ctrl button { border: 0; background: none; color: var(--ink); cursor: pointer;
+                 width: 44px; height: 44px; border-radius: 10px; font-size: 20px;
+                 transition: background-color .25s var(--ease), transform .3s var(--spring); }
+  .ctrl button:hover:not(:disabled) { background: var(--cream2); }
+  .ctrl button:active:not(:disabled) { transform: scale(.92); }
+  .ctrl button:disabled { opacity: .3; cursor: default; }
+  .ctrl .today-btn { width: auto; height: 40px; padding: 0 18px; background: var(--cream2);
+                     border-radius: 999px; font-size: 13px; margin-right: 4px; font-family: inherit; }
+
+  .msg { font-size: 12px; color: var(--muted); padding: 0 4px 8px; }
+  .msg:empty { display: none; }
+
+  .dow, #grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+  .dow { border-bottom: 1px solid var(--line); text-align: center; font-size: 12px;
+         color: var(--muted); padding: 10px 0; }
+  .dow div:first-child { color: var(--red); }
+
+  .gridwrap { position: relative; }
+  #grid { transition: opacity .4s var(--ease); }
+
+  .day {
+    position: relative; min-height: 72px; margin: 0 3px; padding: 8px;
+    border-bottom: 1px solid var(--line); cursor: pointer;
+    transition: background-color .25s var(--ease), border-radius .25s var(--ease);
+    animation: cellIn .45s var(--ease) backwards; animation-delay: calc(var(--i, 0) * 14ms);
+  }
+  .day:not(.out):hover { background: var(--cream2); border-radius: 10px; }
+  .day:focus-visible { outline: 2px solid var(--brown); outline-offset: -2px; border-radius: 10px; }
+  .day .num {
+    font-size: 14px; display: inline-block; min-width: 24px; text-align: center;
+    border-radius: 8px; padding: 2px 4px;
+    transition: transform .3s var(--spring);
+  }
+  .day:not(.out):hover .num { transform: scale(1.12); }
+  .day.out { cursor: default; }
+  .day.out .num { color: #c3b7a4; }
+  .day.busy { background: var(--busy-bg); border-radius: 10px; border-bottom-color: transparent; }
+  .day.busy:hover { background: #c9dbe4; }
+  .day.busy::after {
+    content: ''; position: absolute; left: 8px; right: 8px; bottom: 7px;
+    height: 4px; border-radius: 2px; background: var(--busy-bar);
+    transform-origin: left center;
+    animation: bar .6s var(--ease) backwards; animation-delay: calc(var(--i, 0) * 14ms + 160ms);
+  }
+  .day.busy .num { color: var(--busy-ink); font-weight: 600; }
+  .day.red:not(.busy) .num { color: var(--red); }
+  .day.today .num { background: var(--brown); color: #fff; }
+  .today-tag { position: absolute; top: 10px; right: 10px; font-size: 10px; color: var(--muted); }
+  .hol { display: block; margin-top: 3px; font-size: 10px; line-height: 1.3; color: var(--red);
+         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .day.busy .hol { color: #9a4332; }
+
+  /* 選択の枠（なめらかにすべる） */
+  .ring {
+    position: absolute; left: 0; top: 0; z-index: 2; pointer-events: none; opacity: 0;
+    border: 1.5px solid var(--brown); border-radius: 10px; background: rgba(122, 90, 67, .07);
+    transition: transform .45s var(--spring), width .4s var(--ease), height .4s var(--ease),
+                border-color .3s var(--ease), opacity .3s var(--ease);
+  }
+  .ring.busy { border-color: var(--busy-bar); }
+  .ring.no-anim { transition: none; }
+
+  .legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px;
+            font-size: 11px; color: var(--muted); padding: 12px 4px 4px; margin-top: 6px; }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .legend .dot { width: 14px; height: 10px; border-radius: 3px; background: var(--busy-bg);
+                 border-bottom: 3px solid var(--busy-bar); }
+  .legend .box { width: 12px; height: 12px; border: 1.5px solid var(--brown); border-radius: 4px; }
+  .legend .tz { margin-left: auto; }
+
+  #card.loading #grid { opacity: .4; pointer-events: none; }
+  #card.error .dow, #card.error .gridwrap, #card.error .legend, #card.error .ctrl { display: none; }
+  #card.error .msg { color: var(--red); font-size: 14px; text-align: center; padding: 28px 8px 40px; }
+  .is-error #nextCard, .is-error #side { display: none; }
+  .is-error .layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "cal"; }
+
+  /* 右の相談カード */
+  .side { padding: 20px; }
+  .side-in.in { animation: sideIn .4s var(--ease); }
+  .side-label { font-size: 12px; color: var(--muted); }
+  .side-date { font-size: 20px; font-weight: 600; margin: 4px 0 2px; line-height: 1.35; }
+  .side-hol { font-size: 12px; color: var(--red); }
+  .badge { display: inline-flex; align-items: center; margin-top: 10px; padding: 5px 12px;
+           border-radius: 999px; font-size: 12px; font-weight: 500; }
+  .badge.free { background: var(--brown); color: #fff; }
+  .badge.busy { background: var(--busy-bg); color: var(--busy-ink); box-shadow: inset 0 -3px 0 var(--busy-bar); }
+  .badge.past { background: var(--cream2); color: var(--muted); }
+  .side-msg { font-size: 13px; line-height: 1.7; margin: 12px 0; }
+  .near { margin-bottom: 4px; }
+  .actions { display: grid; gap: 8px; margin-top: 6px; }
+  .btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    border: 1px solid var(--line); background: transparent; color: var(--ink);
+    font: inherit; font-size: 13px; padding: 11px 14px; border-radius: 12px; cursor: pointer; text-decoration: none;
+    transition: background-color .25s var(--ease), color .25s var(--ease), border-color .25s var(--ease), transform .3s var(--spring);
+  }
+  .btn:hover { background: var(--cream2); transform: translateY(-1px); }
+  .btn:active { transform: scale(.98); }
+  .btn.primary { background: var(--brown); border-color: var(--brown); color: #fff; }
+  .btn.primary:hover { background: #6a4d39; }
+  .btn.primary.done { background: var(--ink); border-color: var(--ink); }
+  .note { font-size: 11px; color: var(--muted); line-height: 1.6; margin: 12px 0 0; }
+
+  .foot { max-width: 1048px; margin: 14px auto 32px; padding: 0 24px; font-size: 12px;
+          color: #a99a86; display: flex; align-items: center; gap: 8px; }
+
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "next" "cal" "side"; }
+    #side { position: static; }
+  }
+  @media (max-width: 560px) {
+    .topbar, .hero { padding-left: 16px; padding-right: 16px; }
+    .hero { flex-direction: column; align-items: flex-start; }
+    .meta { text-align: left; } .meta .pub { justify-content: flex-start; }
+    h1 { font-size: 24px; }
+    .layout, .foot { padding-left: 12px; padding-right: 12px; }
+    .card { padding: 14px 8px 8px; }
+    .next-card { padding: 12px 14px; }
+    .side { padding: 16px; }
+    .month { font-size: 22px; }
+    .day { min-height: 52px; padding: 6px 2px; margin: 0 1px; }
+    .day.busy::after { left: 5px; right: 5px; }
+    .today-tag, .hol { display: none; }
+    .legend .tz { margin-left: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
 </style>
 </head>
 <body>
-<div class="cal">
-  <header>
-    <button id="prev" aria-label="Previous month">‹</button>
-    <h2 id="title"></h2>
-    <button id="next" aria-label="Next month">›</button>
-  </header>
-  <div class="dow"><div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div></div>
-  <div id="grid"></div>
-  <p id="msg"></p>
-  <p class="note">水色の日は予定が入っています</p>
+
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-icon"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></div>
+    <span id="siteName"></span>
+  </div>
+  <div class="pill"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>閲覧専用</div>
+</div>
+
+<div class="hero">
+  <h1 id="title"></h1>
+  <div class="meta">
+    <div class="pub"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>リンクを知っている人に公開中</div>
+    <div class="upd" id="updated"></div>
+  </div>
+</div>
+
+<main class="layout">
+  <section class="card next-card" id="nextCard">
+    <div class="next-label">次に空いている日</div>
+    <div class="chips" id="nextChips"></div>
+  </section>
+
+  <section class="card loading" id="card">
+    <div class="cal-head">
+      <div><div class="year" id="year"></div><div class="month" id="month"></div></div>
+      <div class="ctrl">
+        <button class="today-btn" id="todayBtn">今日</button>
+        <button id="prev" aria-label="前の月">‹</button>
+        <button id="next" aria-label="次の月">›</button>
+      </div>
+    </div>
+    <div class="msg" id="msg" role="status">読み込み中…</div>
+    <div class="dow"><div>日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div>土</div></div>
+    <div class="gridwrap">
+      <div id="grid"></div>
+      <div class="ring" id="ring"></div>
+    </div>
+    <div class="legend">
+      <span><i class="dot"></i>予定あり</span>
+      <span><i class="box"></i>選択中の日付</span>
+      <span>何もない日は空いています</span>
+      <span class="tz">Asia/Tokyo（GMT+09:00）</span>
+    </div>
+  </section>
+
+  <aside class="card side" id="side"><div class="side-in" id="sideIn"></div></aside>
+</main>
+
+<div class="foot">
+  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+  カレンダーは閲覧専用です。既存の予定は編集できません。
 </div>
 
 <script>
+const SITE_NAME = 'primo-schedule';  // 左上のサイト名
+const OWNER = 'primo';               // 「〇〇 のカレンダー」の名前
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwBpyGo-q3vVvkWSuysg7s53iLUSv7aFGFpZMxNIasynQv9Hwc4YHUl2eYsbWMthT4eHA/exec';
-const KEY = location.hash.slice(1); // https://サイト/#合言葉
+const DM_URL = '';                   // DMの宛先（XのプロフィールやDiscordのURL）。空なら「DMを開く」は出ません
+const KEY = location.hash.slice(1);  // https://サイト/#鍵
+
+const MAX_OFF = 3;                   // 今月から何か月先まで見せるか
+const W = ['日', '月', '火', '水', '木', '金', '土'];
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const smooth = reduceMotion ? 'auto' : 'smooth';
+
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, '0');
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseKey = k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+const now = new Date();
+const todayKey = ymd(now);
+const limitKey = ymd(new Date(now.getFullYear(), now.getMonth() + MAX_OFF + 1, 0));
 
 let busy = new Set();
-let off = 0; // 今月からのずれ（0〜3）
-const today = new Date();
-const pad = n => String(n).padStart(2, '0');
-const key = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`;
+let holidays = {};
+let status = 'loading';
+let off = 0;
+let selected = todayKey;
+const cells = new Map();
 
-function render() {
-  const cur = new Date(today.getFullYear(), today.getMonth() + off, 1);
-  const y = cur.getFullYear(), m = cur.getMonth();
-  document.getElementById('title').textContent =
-    cur.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  document.getElementById('prev').disabled = off === 0;
-  document.getElementById('next').disabled = off === 3;
+const card = $('card'), grid = $('grid'), ring = $('ring'), msg = $('msg');
+const side = $('side'), sideIn = $('sideIn'), nextChips = $('nextChips');
 
-  const grid = document.getElementById('grid');
+$('siteName').textContent = SITE_NAME;
+$('title').textContent = OWNER + ' のカレンダー';
+
+const wl = d => W[d.getDay()] + (holidays[ymd(d)] ? '・祝' : '');
+const label = d => `${d.getMonth() + 1}/${d.getDate()}（${wl(d)}）`;
+
+function retrigger(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+
+function setStatus(s) {
+  status = s;
+  card.classList.toggle('loading', s === 'loading');
+  card.classList.toggle('error', s === 'error');
+  document.body.classList.toggle('is-error', s === 'error');
+  msg.textContent = s === 'loading' ? '読み込み中…'
+    : s === 'error' ? '読み込めませんでした。リンクを確認してください' : '';
+}
+
+// fromKey 以降の空いている日を n 個
+function freeDaysFrom(fromKey, n) {
+  const start = parseKey(fromKey < todayKey ? todayKey : fromKey);
+  const out = [];
+  for (let i = 0; i < 140 && out.length < n; i++) {
+    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    if (ymd(d) > limitKey) break;
+    if (!busy.has(ymd(d))) out.push(d);
+  }
+  return out;
+}
+
+function makeChip(d, i) {
+  const b = document.createElement('button');
+  b.className = 'chip';
+  b.style.setProperty('--i', i);
+  b.textContent = label(d);
+  b.onclick = () => jumpTo(ymd(d));
+  return b;
+}
+
+function renderNext() {
+  nextChips.innerHTML = '';
+  if (status !== 'ok') { nextChips.textContent = '読み込み中…'; return; }
+  const list = freeDaysFrom(todayKey, 6);
+  if (!list.length) { nextChips.textContent = 'しばらく空きがありません'; return; }
+  list.forEach((d, i) => nextChips.appendChild(makeChip(d, i)));
+}
+
+function placeRing(animate) {
+  const c = status === 'ok' ? cells.get(selected) : null;
+  if (!c) { ring.style.opacity = 0; return; }
+  if (!animate) ring.classList.add('no-anim');
+  ring.style.width = c.offsetWidth + 'px';
+  ring.style.height = c.offsetHeight + 'px';
+  ring.style.transform = `translate(${c.offsetLeft}px, ${c.offsetTop}px)`;
+  ring.style.opacity = 1;
+  ring.classList.toggle('busy', c.classList.contains('busy'));
+  if (!animate) { void ring.offsetWidth; ring.classList.remove('no-anim'); }
+}
+
+function renderMonth() {
+  const first = new Date(now.getFullYear(), now.getMonth() + off, 1);
+  const y = first.getFullYear(), m = first.getMonth();
+  $('year').textContent = y;
+  $('month').textContent = (m + 1) + '月';
+  retrigger($('month'), 'swap');
+  $('prev').disabled = off === 0;
+  $('next').disabled = off === MAX_OFF;
+
+  const lastDay = new Date(y, m + 1, 0).getDate();
+  const total = Math.ceil((first.getDay() + lastDay) / 7) * 7;
   grid.innerHTML = '';
-  for (let i = 0; i < cur.getDay(); i++) grid.appendChild(document.createElement('div'));
+  cells.clear();
 
-  const last = new Date(y, m + 1, 0).getDate();
-  const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  for (let d = 1; d <= last; d++) {
+  for (let i = 0; i < total; i++) {
+    const d = new Date(y, m, 1 - first.getDay() + i);
+    const k = ymd(d);
+    const inMonth = d.getMonth() === m;
+    const isToday = inMonth && k === todayKey;
+    const isBusy = inMonth && busy.has(k);
+    const hol = inMonth ? holidays[k] : '';
+    const isRed = inMonth && !isToday && (d.getDay() === 0 || !!hol);
+
     const c = document.createElement('div');
-    const date = new Date(y, m, d);
-    let cls = 'day';
-    if (date < t0) cls += ' past';
-    else if (busy.has(key(y, m, d))) cls += ' busy';
-    if (date.getTime() === t0.getTime()) cls += ' today';
-    c.className = cls;
-    c.textContent = d;
+    c.className = 'day'
+      + (inMonth ? '' : ' out')
+      + (isToday ? ' today' : '')
+      + (isBusy ? ' busy' : '')
+      + (isRed ? ' red' : '');
+    c.style.setProperty('--i', Math.min(i, 35));
+        if (hol) c.title = hol;
+    c.innerHTML = `<span class="num">${d.getDate()}</span>`
+      + (hol ? `<span class="hol">${esc(hol)}</span>` : '')
+      + (isToday ? '<span class="today-tag">今日</span>' : '');
+    if (inMonth) {
+      c.setAttribute('role', 'button');
+      c.tabIndex = 0;
+      c.setAttribute('aria-label', `${m + 1}月${d.getDate()}日 ${isBusy ? '予定あり' : '予定なし'}`);
+      c.onclick = () => selectKey(k);
+      c.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectKey(k); } };
+      cells.set(k, c);
+    }
     grid.appendChild(c);
+  }
+  placeRing(false);
+}
+
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); return true; }
+  catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = t; ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e2) {}
+    ta.remove();
+    return ok;
   }
 }
 
-document.getElementById('prev').onclick = () => { off--; render(); };
-document.getElementById('next').onclick = () => { off++; render(); };
-render();
+function updatePanel() {
+  if (status !== 'ok') {
+    sideIn.innerHTML = '<p class="side-msg">カレンダーを読み込み中…</p>';
+    retrigger(sideIn, 'in');
+    return;
+  }
+  const d = parseKey(selected);
+  const past = selected < todayKey;
+  const isBusy = busy.has(selected);
+  const hol = holidays[selected];
+  const near = (past || isBusy) ? freeDaysFrom(past ? todayKey : selected, 3) : [];
+  const canAct = !past && !isBusy;
 
-fetch(`${GAS_URL}?k=${encodeURIComponent(KEY)}`)
-  .then(r => r.json())
-  .then(data => {
-    if (!Array.isArray(data)) throw new Error('forbidden');
-    busy = new Set(data);
-    render();
-  })
-  .catch(() => {
-    document.getElementById('msg').textContent = '読み込めませんでした。リンクを確認してください';
-  });
+  let badge, text;
+  if (past) {
+    badge = '<span class="badge past">過ぎた日</span>';
+    text = '過ぎた日です。これから会える日はこっち！';
+  } else if (isBusy) {
+    badge = '<span class="badge busy">埋まっています</span>';
+    text = 'この日は予定が入ってます。近い空き日をさがしてね( ᵕ̩̩ㅅᵕ̩̩ )';
+  } else {
+    badge = '<span class="badge free">空いています</span>';
+    text = 'この日は空いてます！ DMでも直接でも連絡してね🎐';
+  }
+
+  sideIn.innerHTML = `
+    <div class="side-label">選んだ日</div>
+    <div class="side-date">${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${wl(d)}）</div>
+    ${hol ? `<div class="side-hol">${esc(hol)}</div>` : ''}
+    ${badge}
+    <p class="side-msg">${text}</p>
+    ${near.length ? '<div class="near" id="near"></div>' : ''}
+    ${canAct ? `<div class="actions">
+        <a class="btn primary" id="gcalBtn" target="_blank" rel="noopener">自分のカレンダーに仮で入れる</a>
+      </div>
+      <p class="note">押すと、あなたのGoogleカレンダーの予定追加画面が開きます。保存するまでは、何も入りません。</p>` : ''}`;
+
+  if (near.length) near.forEach((nd, i) => $('near').appendChild(makeChip(nd, i)));
+
+  if (canAct) {
+    const next = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+    const g = s => `${s.getFullYear()}${pad(s.getMonth() + 1)}${pad(s.getDate())}`;
+    $('gcalBtn').href = 'https://calendar.google.com/calendar/render?action=TEMPLATE'
+      + '&text=' + encodeURIComponent(`${OWNER} と会う（候補）`)
+      + '&dates=' + g(d) + '/' + g(next)
+      + '&details=' + encodeURIComponent('仮の予定です。詳しくはDMで決めましょう。');
+  }
+  retrigger(sideIn, 'in');
+}
+function selectKey(k) {
+  selected = k;
+  placeRing(true);
+  updatePanel();
+  if (matchMedia('(max-width: 860px)').matches) side.scrollIntoView({ behavior: smooth, block: 'nearest' });
+}
+
+function jumpTo(k) {
+  const [y, m] = k.split('-').map(Number);
+  off = Math.min(MAX_OFF, Math.max(0, (y - now.getFullYear()) * 12 + (m - 1 - now.getMonth())));
+  selected = k;
+  renderMonth();
+  updatePanel();
+  card.scrollIntoView({ behavior: smooth, block: 'nearest' });
+}
+
+$('prev').onclick = () => { off--; renderMonth(); };
+$('next').onclick = () => { off++; renderMonth(); };
+$('todayBtn').onclick = () => { off = 0; selected = todayKey; renderMonth(); updatePanel(); };
+addEventListener('resize', () => placeRing(false));
+
+setStatus('loading');
+renderMonth();
+renderNext();
+updatePanel();
+
+if (!KEY) {
+  setStatus('error');
+} else {
+  fetch(`${GAS_URL}?k=${encodeURIComponent(KEY)}`)
+    .then(r => r.json())
+    .then(data => {
+      if (!Array.isArray(data.days)) throw new Error('forbidden');
+      busy = new Set(data.days);
+      holidays = data.holidays || {};
+      $('updated').textContent = 'データ取得 ' + data.updated;
+      setStatus('ok');
+      renderMonth();
+      renderNext();
+      updatePanel();
+    })
+    .catch(() => setStatus('error'));
+}
 </script>
 </body>
 </html>
